@@ -1,0 +1,183 @@
+---
+title: "Trabajo final: Modelamiento de datos"
+subtitle: "Cluster de Obesidad"
+output: html_document
+date: "2025-05-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Algoritmo Kmeans
+
+K-means es un algoritmo de clustering no supervisado que agrupa los datos en k grupos o clusters, de tal forma que:
+
+- Los datos **dentro de un mismo cluster** son lo **más parecidos posible entre sí**.
+
+- Los datos **entre distintos clusters** son lo **más distintos posible**.
+
+
+\[
+\min_{C_1, C_2, \dots, C_k} \sum_{j=1}^{k} \sum_{x_i \in C_j} \| x_i - \mu_j \|^2
+\]
+
+
+
+| Símbolo             | Significado                                                                  |
+| ------------------- | ---------------------------------------------------------------------------- |
+| $k$                 | Número de clusters (debes definirlo antes de aplicar el algoritmo)           |
+| $x_i$               | Punto de datos número $i$ (observación del conjunto de datos)                |
+| $C_j$               | Conjunto de puntos asignados al cluster $j$                                  |
+| $\mu_j$             | Centroide del cluster $j$: promedio de todos los puntos en $C_j$             |
+| $\|x_i - \mu_j\|^2$ | Distancia euclidiana al cuadrado entre el punto $x_i$ y su centroide $\mu_j$ |
+
+## 2. Descripción del dataset
+
+Fuente de datos [Kaggle](https://www.kaggle.com/datasets/aravindpcoder/obesity-or-cvd-risk-classifyregressorcluster).
+
+
+Los datos consisten en la estimación de los niveles de obesidad en personas de México, Perú y Colombia, con edades comprendidas entre los 14 y los 61 años, y con diversos hábitos alimentarios y condición física. Los datos se recopilaron mediante una plataforma web con una encuesta donde usuarios anónimos respondieron cada pregunta. Posteriormente, se procesó la información, obteniendo 17 atributos y 2111 registros.
+
+
+
+Los atributos relacionados con los hábitos alimentarios son: 
+
+- consumo frecuente de alimentos de alto valor calórico (FAVC)
+- frecuencia de consumo de verduras (FCVC), número de comidas principales (NCP)
+- consumo de alimentos entre comidas (CAEC)
+- consumo diario de agua (CH20)
+- consumo de alcohol (CALC)
+
+Los atributos relacionados con la condición física son: 
+
+- monitoreo del consumo de calorías (SCC)
+- frecuencia de actividad física (FAF)
+- tiempo de uso de dispositivos tecnológicos (TUE)
+- transporte utilizado (MTRANS).
+
+
+## Data managment
+
+
+```{r cars,warning=FALSE, message=FALSE}
+
+# Establecemos la ruta de trabajo
+setwd("C:/Users/Rihard/Documents/GitHub/Cluster_obesity")
+
+# Cargar librerías
+library(tidyverse)
+library(cluster)
+library(factoextra)
+# Cargar librerías
+library(tidyverse)
+library(cluster)
+library(factoextra)
+# Cargar paquetes necesarios
+library(tidyverse)
+library(caret)
+library(FactoMineR)
+library(factoextra)
+library(recipes)
+library(dplyr)
+
+# Leer archivo
+data <- read.csv("ObesityDataSet.csv")
+
+```
+
+```{r}
+
+vars <- c("Gender", "family_history_with_overweight", "FAVC",
+          "CAEC", "SMOKE", "SCC", "CALC", "MTRANS")
+tables <- lapply(data[vars], table)
+tables
+
+```
+
+```{r}
+
+# Eliminamos las variables con más de dos categorías 
+
+data <- data %>% select(-MTRANS, -CAEC, -CALC, NObeyesdad)
+
+# Ver primeras filas
+head(data)
+# Ver estructura
+glimpse(data)
+
+# Verificar valores faltantes
+colSums(is.na(data))
+
+# Estadísticas descriptivas
+summary(data)
+
+```
+
+
+
+
+## Implementación del modelo
+
+
+```{r pressure, message=FALSE, warning=FALSE}
+rec <- recipe(~., data = data %>% select(-NObeyesdad)) %>%
+  step_dummy(all_nominal()) %>%      # convierte a dummies
+  step_center(all_numeric()) %>%
+  step_scale(all_numeric())
+
+data_clean <- bake(prep(rec), new_data = NULL)
+
+# Escalar datos
+data_scaled <- scale(data_clean)
+
+```
+## Elegir número óptimo de clusters (elbow method) 3
+
+```{r}
+
+fviz_nbclust(data_scaled, kmeans, method = "wss")
+```
+
+## Visualizamos los 3 cluster
+
+Mediante el elbow method
+
+
+```{r}
+
+# Ejecutar K-means con 5 clustwers
+set.seed(123)
+km <- kmeans(data_scaled, centers = 3, nstart = 25)
+
+# Visualizar clusters
+fviz_cluster(km, data = data_scaled)
+
+```
+## Describimos los cluster generados
+
+```{r, warning=FALSE}
+
+# Añadir resultados al dataset original
+data_clustered <- data %>% mutate(Cluster = factor(km$cluster))
+
+# Calcular promedios por cluster (solo numéricas)
+promedios <- data_clustered %>%
+  group_by(Cluster) %>%
+  summarise(across(where(is.numeric), mean, na.rm = TRUE))
+
+# Mostrar tabla
+print(promedios)
+
+```
+
+## Resultados finales
+
+| Cluster | Perfil general                             | Edad | Peso (kg) | Altura (m) | FCVC<br>(Verduras) | NCP<br>(Comidas/día) | CH2O<br>(Agua) | FAF<br>(Actividad física) | TUE<br>(Tecnología) | Interpretación                                                |
+| ------- | ------------------------------------------ | ---- | --------- | ---------- | ------------------ | -------------------- | -------------- | ------------------------- | ------------------- | ------------------------------------------------------------- |
+| **1**   | Adultos con sobrepeso y hábitos saludables | 25.1 | 94.0      | 1.77       | 2.26               | 2.79                 | 2.09           | 1.19                      | 0.685               | Sobrepeso alto pero con dieta y actividad aceptables          |
+| **2**   | Jóvenes saludables                         | 20.9 | 58.7      | 1.63       | 2.38               | 2.50                 | 1.82           | 1.11                      | 0.658               | Jóvenes con peso normal y buenos hábitos                      |
+| **3**   | Adultos con obesidad y bajo ejercicio      | 25.5 | 95.1      | 1.66       | 2.65               | 2.67                 | 2.02           | 0.72                      | 0.624               | Obesidad marcada, dieta aceptable, pero poca actividad física |
+
+
+
